@@ -28,6 +28,7 @@ transform = torchvision.transforms.Compose([
 ])
 
 DUKE17_ROOT = "./data/Sparsity_SDOCT_DATASET_2012/"
+# DUKE28_ROOT = "./data/Final_Publication_2013_SBSDI_sourcecode_withpcode/For synthetic experiments"
 
 total_psnr = utils.AverageMeter()
 total_ssim = utils.AverageMeter()
@@ -42,7 +43,9 @@ for idx in os.listdir(DUKE17_ROOT):
         idx_root = os.path.join(DUKE17_ROOT, idx)
 
         input_path = os.path.join(idx_root, idx+"_Raw Image.tif")
+        # input_path = os.path.join(idx_root, "test.tif")
         label_path = os.path.join(idx_root, idx+"_Averaged Image.tif")
+        # label_path = os.path.join(idx_root, "average.tif")
 
         input_image = load_image(input_path)
         label_image = load_image(label_path)
