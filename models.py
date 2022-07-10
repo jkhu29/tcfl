@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
-from collections import namedtuple
-from functools import partial
 
 
 class DnCNN(nn.Module):
@@ -25,123 +22,211 @@ class DnCNN(nn.Module):
 
     def forward(self, x):
         out = self.dncnn(x)
-        # out = out + torch.rand_like(out)
         return out
 
 
-class NLayerDiscriminator(nn.Module):
-    def __init__(self, input_nc, ndf=64, n_layers=3, scale_factor=8, norm_layer=nn.BatchNorm2d):
-        super(NLayerDiscriminator, self).__init__()
-        # no need to use bias as BatchNorm2d has affine parameters
-        if type(norm_layer) == partial:
-            use_bias = norm_layer.func != nn.BatchNorm2d
-        else:
-            use_bias = norm_layer != nn.BatchNorm2d
-        self.strides, self.n_down = self.comp_strides(scale_factor, n_layers)
+class GeneratorUNet(nn.Module):
+    def __init__(self):
+        super(GeneratorUNet, self).__init__()
+        # for noise learning
+        # encoder
+        self.conv1_1_02 = nn.Conv2d(1, 64, 3, padding=1)
+        self.bn1_1_02 = nn.BatchNorm2d(64)
+        self.conv1_2_02 = nn.Conv2d(64, 64, 3, padding=1)
+        self.bn1_2_02 = nn.BatchNorm2d(64)
 
-        kw = 4
-        padw = 1
-        sequence = [nn.Conv2d(input_nc, ndf, kernel_size=kw, stride=self.strides[0], padding=padw), nn.LeakyReLU(0.2, True)]
-        nf_mult = 1
-        nf_mult_prev = 1
-        # gradually increase the number of filters
-        for n in range(1, n_layers):
-            nf_mult_prev = nf_mult
-            nf_mult = min(2 ** n, 8)
-            sequence += [
-                nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=self.strides[n], padding=padw, bias=use_bias),
-                norm_layer(ndf * nf_mult),
-                nn.LeakyReLU(0.2, True)
-            ]
+        self.conv2_1_02 = nn.Conv2d(64, 128, 3, padding=1)
+        self.bn2_1_02 = nn.BatchNorm2d(128)
+        self.conv2_2_02 = nn.Conv2d(128, 128, 3, padding=1)
+        self.bn2_2_02 = nn.BatchNorm2d(128)
 
-        nf_mult_prev = nf_mult
-        nf_mult = min(2 ** n_layers, 8)
-        sequence += [
-            nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=2, padding=padw, bias=use_bias),
-            norm_layer(ndf * nf_mult),
-            nn.LeakyReLU(0.2, True),
-            nn.Conv2d(ndf * nf_mult, ndf * nf_mult, kernel_size=kw, stride=1, padding=1, bias=use_bias),
-            nn.ReflectionPad2d((0, 1, 1, 0)),
-            norm_layer(ndf * nf_mult),
-            nn.LeakyReLU(0.2, True),
-        ]
+        self.conv3_1_02 = nn.Conv2d(128, 256, 3, padding=1)
+        self.bn3_1_02 = nn.BatchNorm2d(256)
+        self.conv3_2_02 = nn.Conv2d(256, 256, 3, padding=1)
+        self.bn3_2_02 = nn.BatchNorm2d(256)
 
-        sequence += [
-            nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=1, bias=use_bias),
-            nn.ReflectionPad2d((0, 1, 1, 0))
-        ]
-        # output one channel prediction map
-        self.model = nn.Sequential(*sequence)
+        self.conv4_1_02 = nn.Conv2d(256, 512, 3, padding=1)
+        self.bn4_1_02 = nn.BatchNorm2d(512)
+        self.conv4_2_02 = nn.Conv2d(512, 512, 3, padding=1)
+        self.bn4_2_02 = nn.BatchNorm2d(512)
 
-    def forward(self, input):
-        out = self.model(input)
-        # out = F.avg_pool2d(out, out.size()[2:]).view(out.size()[0], -1)
+        self.conv5_1_02 = nn.Conv2d(512, 1024, 3, padding=1)
+        self.bn5_1_02 = nn.BatchNorm2d(1024)
+        self.conv5_2_02 = nn.Conv2d(1024, 512, 3, padding=1)
+        self.bn5_2_02 = nn.BatchNorm2d(512)
+
+        # decoder
+        self.upconv4_1_02 = nn.Conv2d(1024, 512, 3, padding=1)
+        self.upbn4_1_02 = nn.BatchNorm2d(512)
+        self.upconv4_2_02 = nn.Conv2d(512, 256, 3, padding=1)
+        self.upbn4_2_02 = nn.BatchNorm2d(256)
+
+        self.upconv3_1_02 = nn.Conv2d(512, 256, 3, padding=1)
+        self.upbn3_1_02 = nn.BatchNorm2d(256)
+        self.upconv3_2_02 = nn.Conv2d(256, 128, 3, padding=1)
+        self.upbn3_2_02 = nn.BatchNorm2d(128)
+
+        self.upconv2_1_02 = nn.Conv2d(256, 128, 3, padding=1)
+        self.upbn2_1_02 = nn.BatchNorm2d(128)
+        self.upconv2_2_02 = nn.Conv2d(128, 64, 3, padding=1)
+        self.upbn2_2_02 = nn.BatchNorm2d(64)
+
+        self.upconv1_1_02 = nn.Conv2d(128, 32, 3, padding=1)
+        self.upbn1_1_02 = nn.BatchNorm2d(32)
+        self.upconv1_2_02 = nn.Conv2d(32, 1, 3, padding=1)
+        self.upbn1_2_02 = nn.BatchNorm2d(64)
+
+        # ************************************************************
+        self.maxpool = nn.MaxPool2d(2, stride=2, return_indices=False, ceil_mode=False)
+        self.upsample = nn.UpsamplingBilinear2d(scale_factor=2)
+
+    def forward(self, x0):
+        # encoder for noise learning
+        x1_1_02 = F.relu(self.bn1_1_02(self.conv1_1_02(x0)))
+        x1_2_02 = F.relu(self.bn1_2_02(self.conv1_2_02(x1_1_02)))
+
+        x2_0_02 = self.maxpool(x1_2_02)
+        x2_1_02 = F.relu(self.bn2_1_02(self.conv2_1_02(x2_0_02)))
+        x2_2_02 = F.relu(self.bn2_2_02(self.conv2_2_02(x2_1_02)))
+
+        x3_0_02 = self.maxpool(x2_2_02)
+        x3_1_02 = F.relu(self.bn3_1_02(self.conv3_1_02(x3_0_02)))
+        x3_2_02 = F.relu(self.bn3_2_02(self.conv3_2_02(x3_1_02)))
+
+        x4_0_02 = self.maxpool(x3_2_02)
+        x4_1_02 = F.relu(self.bn4_1_02(self.conv4_1_02(x4_0_02)))
+        x4_2_02 = F.relu(self.bn4_2_02(self.conv4_2_02(x4_1_02)))
+
+        x5_0_02 = self.maxpool(x4_2_02)
+        x5_1_02 = F.relu(self.bn5_1_02(self.conv5_1_02(x5_0_02)))
+        x5_2_02 = F.relu(self.bn5_2_02(self.conv5_2_02(x5_1_02)))
+
+        # decoder for noise learning
+        upx4_1_02 = self.upsample(x5_2_02)
+        upx4_2_02 = F.relu(self.upbn4_1_02(self.upconv4_1_02(torch.cat((upx4_1_02, x4_2_02), 1))))
+        upx4_3_02 = F.relu(self.upbn4_2_02(self.upconv4_2_02(upx4_2_02)))
+
+        upx3_1_02 = self.upsample(upx4_3_02)
+        upx3_2_02 = F.relu(self.upbn3_1_02(self.upconv3_1_02(torch.cat((upx3_1_02, x3_2_02), 1))))
+        upx3_3_02 = F.relu(self.upbn3_2_02(self.upconv3_2_02(upx3_2_02)))
+
+        upx2_1_02 = self.upsample(upx3_3_02)
+        upx2_2_02 = F.relu(self.upbn2_1_02(self.upconv2_1_02(torch.cat((upx2_1_02, x2_2_02), 1))))
+        upx2_3_02 = F.relu(self.upbn2_2_02(self.upconv2_2_02(upx2_2_02)))
+
+        upx1_1_02 = self.upsample(upx2_3_02)
+        upx1_2_02 = self.upconv1_1_02(torch.cat((upx1_1_02, x1_2_02), 1))
+        noise = self.upconv1_2_02(upx1_2_02)
+
+        return noise
+
+
+class SingleLayer(nn.Module):
+    def __init__(self, inChannels, growthRate):
+        super(SingleLayer, self).__init__()
+        self.conv = nn.Conv2d(inChannels, growthRate, kernel_size=3, padding=1, bias=True)
+    def forward(self, x):
+        out = F.relu(self.conv(x))
+        out = torch.cat((x, out), 1)
         return out
 
-    def comp_strides(self, scale_factor, n_layers):
-        assert scale_factor in [1, 2, 4, 8]
-        strides = [1 for _ in range(n_layers)]
-        n_down = 0
-        while True:
-            scale_factor = scale_factor // 2
-            if scale_factor <= 0:
-                break
-            n_down += 1
-        for s in range(n_down):
-            strides[s] = 2
-        return strides, n_down
+
+class SRDenseNet(nn.Module):
+    def __init__(self, growthRate, nDenselayer):
+        super(SRDenseNet, self).__init__()
+        
+        self.conv1 = nn.Conv2d(1, growthRate, kernel_size=3, padding=1, bias=True)
+        inChannels = growthRate
+        
+        self.dense1 = self._make_dense(inChannels, growthRate, nDenselayer)
+        inChannels += nDenselayer*growthRate
+
+        self.dense2 = self._make_dense(inChannels, growthRate, nDenselayer)
+        inChannels += nDenselayer*growthRate
+        
+        self.dense3 = self._make_dense(inChannels, growthRate, nDenselayer)
+        inChannels += nDenselayer*growthRate
+        
+        self.dense4 = self._make_dense(inChannels, growthRate, nDenselayer)
+        inChannels += nDenselayer*growthRate
+        
+        self.dense5 = self._make_dense(inChannels, growthRate, nDenselayer)
+        inChannels += nDenselayer*growthRate
+        
+        self.dense6 = self._make_dense(inChannels, growthRate, nDenselayer)
+        inChannels += nDenselayer*growthRate
+        
+        self.dense7 = self._make_dense(inChannels, growthRate, nDenselayer)
+        inChannels += nDenselayer*growthRate
+
+        self.dense8 = self._make_dense(inChannels, growthRate, nDenselayer)
+        inChannels += nDenselayer*growthRate
+        
+        self.Bottleneck = nn.Conv2d(in_channels=inChannels, out_channels=256, kernel_size=1,padding=0, bias=True)
+
+        self.conv2 =nn.Conv2d(in_channels=256, out_channels=1, kernel_size=3,padding=1, bias=True)
+
+    def _make_dense(self, inChannels, growthRate, nDenselayer):
+        layers = []
+        for i in range(int(nDenselayer)):
+            layers.append(SingleLayer(inChannels,growthRate))
+            inChannels += growthRate
+        return nn.Sequential(*layers)
+                              
+    def forward(self,x):
+        out = F.relu(self.conv1(x))
+        out = self.dense1(out)
+        out = self.dense2(out)
+        out = self.dense3(out)
+        out = self.dense4(out)
+        out = self.dense5(out)
+        out = self.dense6(out)
+        out = self.dense7(out)
+        out = self.dense8(out)
+                                         
+        out = self.Bottleneck(out)
+
+        out = self.conv2(out)
+        return out
 
 
-# class NLayerDiscriminator(nn.Module):
-#     """Defines a PatchGAN discriminator"""
+class Discriminator(nn.Module):
+    def __init__(self, input_shape):
+        super(Discriminator, self).__init__()
 
-#     def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d):
-#         """Construct a PatchGAN discriminator
-#         Parameters:
-#             input_nc (int)  -- the number of channels in input images
-#             ndf (int)       -- the number of filters in the last conv layer
-#             n_layers (int)  -- the number of conv layers in the discriminator
-#             norm_layer      -- normalization layer
-#         """
-#         super(NLayerDiscriminator, self).__init__()
-#         if type(norm_layer) == partial:  # no need to use bias as BatchNorm2d has affine parameters
-#             use_bias = norm_layer.func == nn.InstanceNorm2d
-#         else:
-#             use_bias = norm_layer == nn.InstanceNorm2d
+        channels, height, width = input_shape
 
-#         kw = 4
-#         padw = 1
-#         sequence = [nn.Conv2d(input_nc, ndf, kernel_size=kw, stride=2, padding=padw), nn.LeakyReLU(0.2, True)]
-#         nf_mult = 1
-#         nf_mult_prev = 1
-#         for n in range(1, n_layers):  # gradually increase the number of filters
-#             nf_mult_prev = nf_mult
-#             nf_mult = min(2 ** n, 8)
-#             sequence += [
-#                 nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=2, padding=padw, bias=use_bias),
-#                 norm_layer(ndf * nf_mult),
-#                 nn.LeakyReLU(0.2, True)
-#             ]
+        # Calculate output shape of image discriminator (PatchGAN)
+        self.output_shape = (1, height // 2 ** 4, width // 2 ** 4)
 
-#         nf_mult_prev = nf_mult
-#         nf_mult = min(2 ** n_layers, 8)
-#         sequence += [
-#             nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=1, padding=padw, bias=use_bias),
-#             norm_layer(ndf * nf_mult),
-#             nn.LeakyReLU(0.2, True)
-#         ]
+        def discriminator_block(in_filters, out_filters, stride=2, normalize=True):
+            """Returns downsampling layers of each discriminator block"""
+            layers = [nn.Conv2d(in_filters, out_filters, 4, stride=stride, padding=1)]
+            if normalize:
+                layers.append(nn.InstanceNorm2d(out_filters))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            return layers
 
-#         sequence += [nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]  # output 1 channel prediction map
-#         self.model = nn.Sequential(*sequence)
+        self.model = nn.Sequential(
+            *discriminator_block(channels, 64, normalize=False),
+            *discriminator_block(64, 128),
+            *discriminator_block(128, 256),
+            *discriminator_block(256, 512),
+            nn.ZeroPad2d((1, 0, 1, 0)),
+            nn.Conv2d(512, 1, 4, padding=1)
+        )
 
-#     def forward(self, input):
-#         """Standard forward."""
-#         return self.model(input)
+    def forward(self, img):
+        return self.model(img)
 
 
 if __name__ == "__main__":
     from torchsummary import summary
     # model = DnCNN(1).cuda()
     # summary(model, (1, 64, 64))
-    model = NLayerDiscriminator(1, norm_layer=nn.InstanceNorm2d).cuda()
-    summary(model, (1, 640, 640))
+    # model = GeneratorUNet().cuda()
+    # summary(model, (1, 64, 64))
+    # model = SRDenseNet().cuda()
+    # summary(model, (1, 64, 64))
+    # model = Discriminator((1, 640, 640)).cuda()
+    # summary(model, (1, 640, 640))

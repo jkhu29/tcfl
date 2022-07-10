@@ -3,19 +3,31 @@ import copy
 import random
 from PIL import Image
 
-from skimage import io
+import numpy as np
+import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
+from torch.autograd import Variable
+
+
+def load_image(filepath):
+    image = Image.open(filepath)
+    # image = np.array(image).astype('float32')
+    # mean = np.mean(image)
+    # var = np.var(image)
+    # return np.expand_dims(image, axis=0), mean, var
+    return image
 
 
 class TCFL_Dataset(Dataset):
-    def __init__(self, dataset_name: str = "PKU37", transform = None) -> None:
+    def __init__(self, dataset_name: str = "PKU37", patch_size: int = 128, transform = None) -> None:
         super().__init__()
         self.clean_images_paths = []
         self.noise_images_paths = []
         if transform is None:
             self.transform = transforms.Compose([
                 transforms.ToTensor(),
+                transforms.RandomCrop(patch_size),
             ])
         self.dataset_name = dataset_name
         # init
@@ -43,17 +55,25 @@ class TCFL_Dataset(Dataset):
             I_B_path = os.path.join(self.noise_images_path, I_B)
             C_C_path = os.path.join(self.clean_images_path, C_C)
 
-            I_A_numpy = io.imread(I_A_path)
-            I_B_numpy = io.imread(I_B_path)
-            C_C_numpy = io.imread(C_C_path)
+            # I_A_numpy, I_A_mean, I_A_var = load_image(I_A_path)
+            # I_B_numpy, I_B_mean, I_B_var = load_image(I_B_path)
+            # C_C_numpy, C_C_mean, C_C_var = load_image(C_C_path)
 
-            I_A_image = Image.fromarray(I_A_numpy)
-            I_B_image = Image.fromarray(I_B_numpy)
-            C_C_image = Image.fromarray(C_C_numpy)
+            # I_A_numpy = (I_A_numpy - I_A_mean)
+            # I_B_numpy = (I_B_numpy - I_B_mean)
+            # C_C_numpy = (C_C_numpy - C_C_mean)
 
-            I_A_torch = self.transform(I_A_image).float()
-            I_B_torch = self.transform(I_B_image).float()
-            C_C_torch = self.transform(C_C_image).float()
+            # I_A_torch = torch.from_numpy(I_A_numpy)
+            # I_B_torch = torch.from_numpy(I_B_numpy)
+            # C_C_torch = torch.from_numpy(C_C_numpy)
+
+            I_A_numpy = load_image(I_A_path)
+            I_B_numpy = load_image(I_B_path)
+            C_C_numpy = load_image(C_C_path)
+
+            I_A_torch = self.transform(I_A_numpy).float()
+            I_B_torch = self.transform(I_B_numpy).float()
+            C_C_torch = self.transform(C_C_numpy).float()
         return I_A_torch, I_B_torch, C_C_torch
 
 

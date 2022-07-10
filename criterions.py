@@ -3,6 +3,28 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class TVLoss(torch.nn.Module):
+    """
+    TV loss
+    """
+
+    def __init__(self):
+        super(TVLoss, self).__init__()
+ 
+    def forward(self, x):
+        batch_size = x.size()[0]
+        h_x = x.size()[2]
+        w_x = x.size()[3]
+        count_h = self._tensor_size(x[:,:,1:,:])
+        count_w = self._tensor_size(x[:,:,:,1:])
+        h_tv = torch.pow((x[:,:,1:,:]-x[:,:,:h_x-1,:]),2).sum()
+        w_tv = torch.pow((x[:,:,:,1:]-x[:,:,:,:w_x-1]),2).sum()
+        return 2 * (h_tv/count_h + w_tv/count_w) / batch_size
+ 
+    def _tensor_size(self, t):
+        return t.size()[1]*t.size()[2]*t.size()[3]
+
+
 class GeoLoss(nn.Module):
     def __init__(self, model, criterion=nn.L1Loss()):
         super(GeoLoss, self).__init__()
@@ -147,3 +169,23 @@ class GANLoss(nn.Module):
 
         # loss_weight is always 1.0 for discriminators
         return loss if is_disc else loss * self.loss_weight
+
+
+if __name__ == "__main__":
+    from skimage import io
+    from models import DnCNN
+    from torchvision import transforms
+    import matplotlib.pyplot as plt
+    model = GeoLoss(DnCNN(1))
+    input_numpy = io.imread("./data/Final_Publication_2013_SBSDI_sourcecode_withpcode/test.tif")
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.CenterCrop(256),
+    ])
+    input_torch = transform(input_numpy).unsqueeze(0)
+    geo_image = model.geometry_ensemble(input_torch)
+    plt.subplot(1, 2, 1)
+    plt.imshow(input_torch.squeeze().detach().numpy(), cmap="gray")
+    plt.subplot(1, 2, 2)
+    plt.imshow(geo_image.squeeze().detach().numpy(), cmap="gray")
+    plt.show()
