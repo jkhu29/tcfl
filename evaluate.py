@@ -28,24 +28,26 @@ transform = torchvision.transforms.Compose([
 ])
 
 DUKE17_ROOT = "./data/Sparsity_SDOCT_DATASET_2012/"
-# DUKE28_ROOT = "./data/Final_Publication_2013_SBSDI_sourcecode_withpcode/For synthetic experiments"
+DUKE28_ROOT = "./data/Final_Publication_2013_SBSDI/Final_Publication_2013_SBSDI_sourcecode_withpcode/For test"
 
 total_psnr = utils.AverageMeter()
 total_ssim = utils.AverageMeter()
 total_gcmse = utils.AverageMeter()
+total_epi = utils.AverageMeter()
 
 noise_psnr = utils.AverageMeter()
 noise_ssim = utils.AverageMeter()
 noise_gcmse = utils.AverageMeter()
+noise_epi = utils.AverageMeter()
 
-for idx in os.listdir(DUKE17_ROOT):
+for idx in os.listdir(DUKE28_ROOT):
     if idx != "Readme.txt":
-        idx_root = os.path.join(DUKE17_ROOT, idx)
+        idx_root = os.path.join(DUKE28_ROOT, idx)
 
-        input_path = os.path.join(idx_root, idx+"_Raw Image.tif")
-        # input_path = os.path.join(idx_root, "test.tif")
-        label_path = os.path.join(idx_root, idx+"_Averaged Image.tif")
-        # label_path = os.path.join(idx_root, "average.tif")
+        # input_path = os.path.join(idx_root, idx+"_Raw Image.tif")
+        input_path = os.path.join(idx_root, "test.tif")
+        # label_path = os.path.join(idx_root, idx+"_Averaged Image.tif")
+        label_path = os.path.join(idx_root, "average.tif")
 
         input_image = load_image(input_path)
         label_image = load_image(label_path)
@@ -61,16 +63,21 @@ for idx in os.listdir(DUKE17_ROOT):
         noise_psnr.update(utils.calc_psnr(input_torch.squeeze().cpu(), label_torch.squeeze()))
         noise_ssim.update(structural_similarity(label_torch.numpy().squeeze(), input_torch.cpu().numpy().squeeze()))
         noise_gcmse.update(utils.calc_gcmse(label_torch.numpy().squeeze(), input_torch.cpu().numpy().squeeze())[0])
+        noise_epi.update(utils.calc_epi(label_torch.numpy().squeeze(), input_torch.cpu().numpy().squeeze())[1])
 
         total_psnr.update(utils.calc_psnr(image_torch.squeeze().cpu(), label_torch.squeeze()))
         total_ssim.update(structural_similarity(label_torch.numpy().squeeze(), image_torch.numpy().squeeze()))
         total_gcmse.update(utils.calc_gcmse(label_torch.numpy().squeeze(), image_torch.numpy().squeeze())[0])
+        total_epi.update(utils.calc_epi(label_torch.numpy().squeeze(), image_torch.numpy().squeeze())[1])
 
 print(
     " noise_psnr: "+str(noise_psnr.avg)+"\n",
     "noise_ssim: "+str(noise_ssim.avg)+"\n",
     "noise_gcmse: "+str(noise_gcmse.avg)+"\n",
+    "noise_epi: "+str(noise_epi.avg)+"\n",
+    "\n"
     "total_psnr: "+str(total_psnr.avg)+"\n",
     "total_ssim: "+str(total_ssim.avg)+"\n",
     "total_gcmse: "+str(total_gcmse.avg)+"\n",
+    "total_epi: "+str(total_epi.avg)+"\n",
 )

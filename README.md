@@ -25,6 +25,44 @@ python NLM.py
 
 > 传统方法结果均在./img/下
 
+## 一些结论更新（ Version 2.1: 7.15）
+
+### 数值结果更新
+
+| DUKE17 | psnr | ssim | gcmse |
+| -- | -- | -- | -- |
+| noise | 17.74366911719827 | 0.2124516611408509 | 100.1678589541245 |
+| noise_article | 17.743±0.381 | 0.107±0.005 | 95.709±38.630 |
+| mine | 25.663886070251465 | 0.7351392679465174 | 34.32644832993514 |
+| article | 26.304±1.429 | 0.682±0.038 | 30.407±20.114 |
+
+| DUKE28 | psnr | ssim | gcmse |
+| -- | -- | -- | -- |
+| noise | 17.94173095907484 | 0.23510416304334483 | 71.09206933858773 |
+| noise_article | 17.941±0.454 | 0.102±0.029 | 68.078±25.831 |
+| mine | 26.65534453732627 | 0.7546352317642047 | 23.479009751896292 |
+| article | 28.052±1.807 | 0.704±0.046 | 18.082±17.713 |
+
+### 可能的改进
+
+#### 新的噪声图生成方法
+
+应该可以参考一些 RAW 域去噪的方法，从成像过程开始建模
+
+1. [ELD](https://github.com/Vandermode/ELD): [A Physics-based Noise Formation Model for Extreme Low-light Raw Denoising](https://openaccess.thecvf.com/content_CVPR_2020/papers/Wei_A_Physics-Based_Noise_Formation_Model_for_Extreme_Low-Light_Raw_Denoising_CVPR_2020_paper.pdf)，传感器，从成像过程本身建模（曝光造成的光子散粒噪声- ADC 读数的噪声-行噪声与量化噪声）
+2. [PMRID](https://github.com/MegEngine/PMRID): [Practical Mobile Raw Image Denoising](https://arxiv.org/pdf/2010.06935v1.pdf)，k-sigma 变换（类似Variance Stabilizing Transform / Generalization Anscombe Transform，避免了噪声强度对 ISO 参数的依赖）
+3. [noise-synthesis](https://github.com/zhangyi-3/noise-synthesis): [Rethinking Noise Synthesis and Modeling in Raw Denoising](https://arxiv.org/pdf/2110.04756.pdf)，有信号相关和不相关两部分的分析（信号不相关部分就是直接通过照一块纯黑的地方，然后随机取样）
+
+还有 SAR 图像中的 Speckle 去除（乘性噪声）
+
+1. [Speckle-Constrained Filtering of Ultrasound Images](https://ieeexplore.ieee.org/document/1467489) : f = u + sqrt(u) * noise
+
+#### 套娃
+
+就是 n 重交叉 (n ≥ 3)，这样应该可以解决小样本问题
+
+> 不过 n 可能会有个极限值（纯个人感觉）
+
 ## 问题与一些结论（ Version 2: 7.10）
 
 ### 上一次的遗留问题
@@ -181,7 +219,7 @@ epoch: 4/50:   5%|███▎                                                  
 
 上面数据中，两个 iter 之间的五个数分别是
 
-$l_1(A_1, A_2) $
+$ l_1(A_1, A_2) $
 
 $ l_1(B_1, B_2) $
 
